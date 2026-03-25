@@ -1092,3 +1092,38 @@
     </script>
 </body>
 </html>
+
+<script>
+        // ฟังก์ชันบันทึกทุกช่อง
+        function saveAllData() {
+            const data = {
+                budget: document.getElementById('budget').value,
+                cpc: document.getElementById('cpc').value,
+                conversionRate: document.getElementById('conversionRate').value
+            };
+            localStorage.setItem('adSimData', JSON.stringify(data));
+        }
+
+        // ฟังก์ชันโหลดข้อมูลกลับมา
+        function loadAllData() {
+            const savedData = localStorage.getItem('adSimData');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                // ตรวจสอบว่า id เหล่านี้ตรงกับใน HTML ของคุณจริงๆ
+                if(document.getElementById('budget')) document.getElementById('budget').value = data.budget || '';
+                if(document.getElementById('cpc')) document.getElementById('cpc').value = data.cpc || '';
+                if(document.getElementById('conversionRate')) document.getElementById('conversionRate').value = data.conversionRate || '';
+                
+                // สั่งให้คำนวณใหม่ (ถ้าคุณมีฟังก์ชันคำนวณชื่อ updateResults หรือ calculate)
+                if(typeof updateResults === "function") updateResults(); 
+            }
+        }
+
+        // เรียกใช้งานเมื่อโหลดหน้าเว็บเสร็จ
+        document.addEventListener('DOMContentLoaded', loadAllData);
+    </script>
+</body>
+
+<input type="number" id="budget" oninput="saveAllData(); updateResults();">
+<input type="number" id="cpc" oninput="saveAllData(); updateResults();">
+<input type="number" id="conversionRate" oninput="saveAllData(); updateResults();">
