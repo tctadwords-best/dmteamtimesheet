@@ -159,7 +159,14 @@
             const { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, getFirestore } = window.FirebaseSDK;
             
             try {
-                const config = JSON.parse(__firebase_config);
+                const config = {
+      apiKey: "AIzaSyD-xxxxxxxxxxxxxxx",
+      authDomain: "your-app.firebaseapp.com",
+      projectId: "your-app",
+      storageBucket: "your-app.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcdef"
+    };
                 const appInstance = initializeApp(config);
                 const authInstance = getAuth(appInstance);
                 setDb(getFirestore(appInstance));
