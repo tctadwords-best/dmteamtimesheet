@@ -5,37 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ad Team Timesheet Dashboard</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     
-    <!-- Babel for in-browser JSX compilation -->
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
-    <!-- Firebase SDK (Modular) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Expose Firebase SDK to window for React/Babel to access
-        window.FirebaseSDK = {
-            initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged,
-            getFirestore, doc, setDoc, onSnapshot
-        };
-        window.dispatchEvent(new Event('firebase-loaded'));
-        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3lxc7Mx0zMEIb1jcokvVv5NX6xJXCa5wCroTifbOKU_ofczkiF1rqoGQ-qccRFrho2Q/exec";
-
-    </script>
-
-
-    
     <style>
         /* Hide scrollbar for tabs */
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -82,10 +60,6 @@
         }, {});
 
         function App() {
-          // Firebase States
-          const [firebaseLoaded, setFirebaseLoaded] = useState(!!window.FirebaseSDK);
-          const [user, setUser] = useState(null);
-          const [db, setDb] = useState(null);
           const [saveStatus, setSaveStatus] = useState(''); // '', 'saving', 'saved', 'error'
 
           // Team Management State
@@ -116,24 +90,7 @@
             'Feb-26': {
               baseHours: 176,
               maxHoursData: { ...initialMaxHours },
-              hoursData: {
-                'p1-best': 15, 'p1-petai': 25,
-                'p2-pirun': 18, 'p2-petai': 8,
-                'p3-petai': 10,
-                'p4-namk': 10, 'p4-petai': 4,
-                'p5-namk': 4,
-                'p6-namk': 12,
-                'p7-best': 1,
-                'p8-namk': 70, 'p8-pirun': 30,
-                'p9-best': 30, 'p9-pirun': 15,
-                'p10-pirun': 15,
-                'p11-namk': 15, 'p11-petai': 5,
-                'p12-pirun': 10,
-                'p13-pirun': 10,
-                'p14-best': 1,
-                'p15-best': 5, 'p15-namk': 20, 'p15-pirun': 10, 'p15-petai': 10,
-                'p16-petai': 40,
-              },
+              hoursData: {},
               leaveData: INITIAL_TEAM_MEMBERS.reduce((acc, member) => {
                 acc[member.id] = { leave: 0, holiday: 0 };
                 return acc;
@@ -141,92 +98,40 @@
             }
           });
 
-          // Wait for Firebase SDK to load
+          // 1. โหลดข้อมูลจาก LocalStorage ตอนเปิดหน้าเว็บ
           useEffect(() => {
-            const handleLoad = () => setFirebaseLoaded(true);
-            window.addEventListener('firebase-loaded', handleLoad);
-            return () => window.removeEventListener('firebase-loaded', handleLoad);
-          }, []);
-
-          // Initialize Firebase and Auth
-          useEffect(() => {
-            if (!firebaseLoaded) return;
-            if (typeof __firebase_config === 'undefined') {
-                console.warn("No Firebase configuration found. Please run this inside the correct environment.");
-                return;
-            }
-            
-            const { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, getFirestore } = window.FirebaseSDK;
-            
             try {
-                const config = {
-      apiKey: "AIzaSyD-xxxxxxxxxxxxxxx",
-      authDomain: "your-app.firebaseapp.com",
-      projectId: "your-app",
-      storageBucket: "your-app.appspot.com",
-      messagingSenderId: "123456789",
-      appId: "1:123456789:web:abcdef"
-    };
-                const appInstance = initializeApp(config);
-                const authInstance = getAuth(appInstance);
-                setDb(getFirestore(appInstance));
-
-                const initAuth = async () => {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(authInstance, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(authInstance);
-                    }
-                };
-                initAuth();
-
-                const unsubscribe = onAuthStateChanged(authInstance, setUser);
-                return () => unsubscribe();
-            } catch (e) {
-                console.error("Firebase init error:", e);
-            }
-          }, [firebaseLoaded]);
-
-          // Fetch Data from Firestore on Load & Real-time Sync
-          useEffect(() => {
-            if (!user || !db || !window.FirebaseSDK) return;
-            const { doc, onSnapshot } = window.FirebaseSDK;
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'timesheets', 'main_shared');
-
-            const unsubscribe = onSnapshot(docRef, (docSnap) => {
-              if (docSnap.exists()) {
-                const data = docSnap.data();
+              const saved = localStorage.getItem('ad_team_timesheet_data');
+              if (saved) {
+                const data = JSON.parse(saved);
                 if (data.months && data.months.length > 0) setMonths(data.months);
                 if (data.dataByMonth) setDataByMonth(data.dataByMonth);
                 if (data.projects) setProjects(data.projects);
                 if (data.members) setMembers(data.members);
+                if (data.activeMonth && data.months.includes(data.activeMonth)) {
+                  setActiveMonth(data.activeMonth);
+                }
               }
-            }, (error) => {
-              console.error("Error fetching data:", error);
-            });
-            
-            return () => unsubscribe();
-          }, [user, db]);
+            } catch (error) {
+              console.error("Error loading data from LocalStorage:", error);
+            }
+          }, []);
 
-          // Handle Save to Firebase
-          const handleSaveData = async () => {
-            if (!user || !db || !window.FirebaseSDK) return;
+          // 2. ฟังก์ชันเซฟข้อมูลลง LocalStorage
+          const handleSaveData = () => {
             setSaveStatus('saving');
-            const { doc, setDoc } = window.FirebaseSDK;
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
             try {
-              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'timesheets', 'main_shared');
-              await setDoc(docRef, {
+              const dataToSave = {
                 months,
                 activeMonth,
                 dataByMonth,
                 projects,
                 members
-              });
+              };
+              localStorage.setItem('ad_team_timesheet_data', JSON.stringify(dataToSave));
+              
               setSaveStatus('saved');
-              setTimeout(() => setSaveStatus(''), 3000); // Reset status after 3 seconds
+              setTimeout(() => setSaveStatus(''), 3000); // กลับมาสถานะปกติใน 3 วินาที
             } catch (error) {
               console.error("Error saving data:", error);
               setSaveStatus('error');
@@ -306,7 +211,7 @@
               [activeMonth]: {
                 ...(prev[activeMonth] || {}),
                 hoursData: {
-                  ...((prev[activeMonth] && prev[activeMonth].hoursData) || {}),
+                  ...((prev[activeMonth] && prev[activeMonth].hoursData) ? prev[activeMonth].hoursData : {}),
                   [`${projectId}-${memberId}`]: numValue,
                 }
               }
@@ -320,7 +225,7 @@
               [activeMonth]: {
                 ...(prev[activeMonth] || {}),
                 maxHoursData: {
-                  ...((prev[activeMonth] && prev[activeMonth].maxHoursData) || initialMaxHours),
+                  ...((prev[activeMonth] && prev[activeMonth].maxHoursData) ? prev[activeMonth].maxHoursData : initialMaxHours),
                   [projectId]: numValue,
                 }
               }
@@ -334,9 +239,9 @@
               [activeMonth]: {
                 ...(prev[activeMonth] || {}),
                 leaveData: {
-                  ...((prev[activeMonth] && prev[activeMonth].leaveData) || {}),
+                  ...((prev[activeMonth] && prev[activeMonth].leaveData) ? prev[activeMonth].leaveData : {}),
                   [memberId]: {
-                    ...((prev[activeMonth] && prev[activeMonth].leaveData && prev[activeMonth].leaveData[memberId]) || {}),
+                    ...((prev[activeMonth] && prev[activeMonth].leaveData && prev[activeMonth].leaveData[memberId]) ? prev[activeMonth].leaveData[memberId] : {}),
                     [type]: numValue,
                   }
                 }
@@ -572,8 +477,8 @@
                     >
                       {saveStatus === 'saved' ? <i className="fa-solid fa-circle-check"></i> : 
                        saveStatus === 'saving' ? <i className="fa-solid fa-spinner fa-spin"></i> : 
-                       <i className="fa-solid fa-cloud"></i>}
-                      {saveStatus === 'saved' ? 'Saved to Cloud' : 
+                       <i className="fa-solid fa-floppy-disk"></i>}
+                      {saveStatus === 'saved' ? 'Saved Locally' : 
                        saveStatus === 'saving' ? 'Saving...' : 
                        'Save Data'}
                     </button>
@@ -607,7 +512,7 @@
                         </div>
                       )}
                       <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full flex items-center gap-1 hidden sm:flex">
-                        <i className="fa-solid fa-cloud text-xs"></i> Shared Workspace
+                        <i className="fa-solid fa-desktop text-xs"></i> Local Storage
                       </span>
                     </h1>
                     <p className="text-gray-500 mt-1">ติดตามชั่วโมงการทำงาน (Active vs Non-active) เทียบกับ Target</p>
@@ -1103,38 +1008,3 @@
     </script>
 </body>
 </html>
-
-<script>
-        // ฟังก์ชันบันทึกทุกช่อง
-        function saveAllData() {
-            const data = {
-                budget: document.getElementById('budget').value,
-                cpc: document.getElementById('cpc').value,
-                conversionRate: document.getElementById('conversionRate').value
-            };
-            localStorage.setItem('adSimData', JSON.stringify(data));
-        }
-
-        // ฟังก์ชันโหลดข้อมูลกลับมา
-        function loadAllData() {
-            const savedData = localStorage.getItem('adSimData');
-            if (savedData) {
-                const data = JSON.parse(savedData);
-                // ตรวจสอบว่า id เหล่านี้ตรงกับใน HTML ของคุณจริงๆ
-                if(document.getElementById('budget')) document.getElementById('budget').value = data.budget || '';
-                if(document.getElementById('cpc')) document.getElementById('cpc').value = data.cpc || '';
-                if(document.getElementById('conversionRate')) document.getElementById('conversionRate').value = data.conversionRate || '';
-                
-                // สั่งให้คำนวณใหม่ (ถ้าคุณมีฟังก์ชันคำนวณชื่อ updateResults หรือ calculate)
-                if(typeof updateResults === "function") updateResults(); 
-            }
-        }
-
-        // เรียกใช้งานเมื่อโหลดหน้าเว็บเสร็จ
-        document.addEventListener('DOMContentLoaded', loadAllData);
-    </script>
-</body>
-
-<input type="number" id="budget" oninput="saveAllData(); updateResults();">
-<input type="number" id="cpc" oninput="saveAllData(); updateResults();">
-<input type="number" id="conversionRate" oninput="saveAllData(); updateResults();">
