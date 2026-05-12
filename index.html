@@ -18,18 +18,6 @@
     <!-- Babel for in-browser JSX compilation -->
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
-    <!-- Firebase SDK (Modular) - ใช้เฉพาะ App และ Database ตัด Auth ออกเพื่อลด Error -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
-
-        // Expose Firebase SDK to window for React/Babel to access
-        window.FirebaseSDK = {
-            initializeApp, getDatabase, ref, set, onValue
-        };
-        window.dispatchEvent(new Event('firebase-loaded'));
-    </script>
-
     <style>
         /* Hide scrollbar for tabs */
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -76,10 +64,7 @@
         }, {});
 
         function App() {
-          const [firebaseLoaded, setFirebaseLoaded] = useState(!!window.FirebaseSDK);
-          const [db, setDb] = useState(null);
           const [saveStatus, setSaveStatus] = useState('');
-          const [saveErrorMsg, setSaveErrorMsg] = useState(''); // เพิ่ม state สำหรับเก็บข้อความ Error
 
           const [members, setMembers] = useState(INITIAL_TEAM_MEMBERS);
           const [showTeamModal, setShowTeamModal] = useState(false);
@@ -113,87 +98,43 @@
             }
           });
 
+          // โหลดข้อมูลจาก LocalStorage ตอนเปิดเว็บ
           useEffect(() => {
-            const handleLoad = () => setFirebaseLoaded(true);
-            window.addEventListener('firebase-loaded', handleLoad);
-            return () => window.removeEventListener('firebase-loaded', handleLoad);
+            const savedData = localStorage.getItem('adTeamTimesheetLocal');
+            if (savedData) {
+              try {
+                const parsed = JSON.parse(savedData);
+                if (parsed.months) setMonths(parsed.months);
+                if (parsed.activeMonth) setActiveMonth(parsed.activeMonth);
+                if (parsed.dataByMonth) setDataByMonth(parsed.dataByMonth);
+                if (parsed.projects) setProjects(parsed.projects);
+                if (parsed.members) setMembers(parsed.members);
+              } catch (e) {
+                console.error('Failed to parse local storage data', e);
+              }
+            }
           }, []);
 
-          // Initialize Firebase (Without Auth)
-          useEffect(() => {
-            if (!firebaseLoaded) return;
-            
-            const { initializeApp, getDatabase } = window.FirebaseSDK;
-            
-            try {
-                const firebaseConfig = {
-                  apiKey: "AIzaSyDqZedW6f0pk7Lu79ppLomb7Y_m8VMpRHc",
-                  authDomain: "dmtimesheet-ceed7.firebaseapp.com",
-                  databaseURL: "https://dmtimesheet-ceed7-default-rtdb.asia-southeast1.firebasedatabase.app", 
-                  projectId: "dmtimesheet-ceed7",
-                  storageBucket: "dmtimesheet-ceed7.firebasestorage.app",
-                  messagingSenderId: "367993906452",
-                  appId: "1:367993906452:web:00b46df67d5b2ae1b50e01",
-                  measurementId: "G-HZJQR8BE68"
-                };
-                
-                const appInstance = initializeApp(firebaseConfig);
-                setDb(getDatabase(appInstance));
-            } catch (e) {
-                console.error("Firebase init error:", e);
-            }
-          }, [firebaseLoaded]);
-
-          // Fetch Data from Realtime Database
-          useEffect(() => {
-            if (!db || !window.FirebaseSDK) return;
-            
-            const { ref, onValue } = window.FirebaseSDK;
-            const dataRef = ref(db, 'timesheets/main_shared');
-
-            const unsubscribe = onValue(dataRef, (snapshot) => {
-              if (snapshot.exists()) {
-                const data = snapshot.val();
-                if (data.months && data.months.length > 0) setMonths(data.months);
-                if (data.dataByMonth) setDataByMonth(data.dataByMonth);
-                if (data.projects) setProjects(data.projects);
-                if (data.members) setMembers(data.members);
-              }
-            }, (error) => {
-              console.error("Error fetching data:", error);
-            });
-            
-            return () => unsubscribe();
-          }, [db]);
-
-          // Handle Save to Realtime Database
-          const handleSaveData = async () => {
-            setSaveErrorMsg(''); // ล้าง Error เก่าออกก่อน
-            if (!db || !window.FirebaseSDK) {
-                setSaveErrorMsg('ระบบ Database ยังโหลดไม่เสร็จ หรือตั้งค่าล้มเหลว');
-                setSaveStatus('error');
-                return;
-            }
+          // ฟังก์ชันบันทึกข้อมูลลงเครื่อง (LocalStorage)
+          const handleSaveData = () => {
             setSaveStatus('saving');
-            
-            const { ref, set } = window.FirebaseSDK;
-
-            try {
-              const dataRef = ref(db, 'timesheets/main_shared');
-              await set(dataRef, {
-                months,
-                activeMonth,
-                dataByMonth,
-                projects,
-                members
-              });
-              setSaveStatus('saved');
-              setTimeout(() => setSaveStatus(''), 3000);
-            } catch (error) {
-              console.error("Error saving data:", error);
-              setSaveErrorMsg(error.message); // แสดงข้อความ Error ที่มาจาก Firebase ตรงๆ
-              setSaveStatus('error');
-            }
+            setTimeout(() => {
+              try {
+                const dataToSave = {
+                  months,
+                  activeMonth,
+                  dataByMonth,
+                  projects,
+                  members
+                };
+                localStorage.setItem('adTeamTimesheetLocal', JSON.stringify(dataToSave));
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus(''), 3000);
+              } catch (error) {
+                console.error("Error saving to local storage:", error);
+                setSaveStatus('error');
+              }
+            }, 500); // ดีเลย์จำลองการเซฟให้ดูเป็นธรรมชาติ
           };
 
           const currentData = dataByMonth[activeMonth] || {};
@@ -521,7 +462,7 @@
                   )}
                   </div>
 
-                  {/* Save Button (มีระบบแสดง Error ในตัว) */}
+                  {/* Save Button */}
                   <div className="flex-shrink-0 w-full sm:w-auto relative">
                     <button
                       onClick={handleSaveData}
@@ -536,19 +477,12 @@
                       {saveStatus === 'saved' ? <i className="fa-solid fa-circle-check"></i> : 
                        saveStatus === 'saving' ? <i className="fa-solid fa-spinner fa-spin"></i> : 
                        saveStatus === 'error' ? <i className="fa-solid fa-circle-exclamation"></i> :
-                       <i className="fa-solid fa-cloud"></i>}
-                      {saveStatus === 'saved' ? 'Saved to Cloud' : 
+                       <i className="fa-solid fa-floppy-disk"></i>}
+                      {saveStatus === 'saved' ? 'Saved Locally' : 
                        saveStatus === 'saving' ? 'Saving...' : 
                        saveStatus === 'error' ? 'Save Failed' :
                        'Save Data'}
                     </button>
-                    
-                    {/* กล่องแสดงข้อความ Error ถ้าเซฟไม่ได้ */}
-                    {saveStatus === 'error' && saveErrorMsg && (
-                      <div className="absolute top-full right-0 mt-2 bg-red-100 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm shadow-xl whitespace-nowrap z-50">
-                        <i className="fa-solid fa-triangle-exclamation mr-1"></i> Error: {saveErrorMsg}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -578,8 +512,8 @@
                           </button>
                         </div>
                       )}
-                      <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full flex items-center gap-1 hidden sm:flex">
-                        <i className="fa-solid fa-database text-xs"></i> Realtime DB Shared
+                      <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full flex items-center gap-1 hidden sm:flex">
+                        <i className="fa-solid fa-laptop text-xs"></i> Local Workspace
                       </span>
                     </h1>
                     <p className="text-gray-500 mt-1">ติดตามชั่วโมงการทำงาน (Active vs Non-active) เทียบกับ Target</p>
