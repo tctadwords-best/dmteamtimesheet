@@ -18,19 +18,7 @@
     <!-- Babel for in-browser JSX compilation -->
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
-    <!-- Firebase SDK (Modular) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Expose Firebase SDK to window for React/Babel to access
-        window.FirebaseSDK = {
-            initializeApp, getAuth, signInAnonymously, onAuthStateChanged,
-            getFirestore, doc, setDoc, onSnapshot
-        };
-        window.dispatchEvent(new Event('firebase-loaded'));
-    </script>
+   
 
     <style>
         /* Hide scrollbar for tabs */
