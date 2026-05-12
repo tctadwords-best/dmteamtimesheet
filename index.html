@@ -18,7 +18,19 @@
     <!-- Babel for in-browser JSX compilation -->
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
-   
+    <!-- Firebase SDK (Modular) - เปลี่ยนเป็นใช้ Realtime Database (database) แทน Firestore -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+        // Expose Firebase SDK to window for React/Babel to access
+        window.FirebaseSDK = {
+            initializeApp, getAuth, signInAnonymously, onAuthStateChanged,
+            getDatabase, ref, set, onValue
+        };
+        window.dispatchEvent(new Event('firebase-loaded'));
+    </script>
 
     <style>
         /* Hide scrollbar for tabs */
@@ -136,12 +148,16 @@
           useEffect(() => {
             if (!firebaseLoaded) return;
             
-            const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore } = window.FirebaseSDK;
+            // เปลี่ยนมาใช้ฟังก์ชันของ Realtime Database แทน
+            const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getDatabase } = window.FirebaseSDK;
             
             try {
+                // API ของคุณ Best อันเดิม
                 const firebaseConfig = {
                   apiKey: "AIzaSyDqZedW6f0pk7Lu79ppLomb7Y_m8VMpRHc",
                   authDomain: "dmtimesheet-ceed7.firebaseapp.com",
+                  // สิ่งที่ต้องเพิ่มสำหรับ Realtime Database (ดึงจาก projectId)
+                  databaseURL: "https://dmtimesheet-ceed7-default-rtdb.asia-southeast1.firebasedatabase.app", 
                   projectId: "dmtimesheet-ceed7",
                   storageBucket: "dmtimesheet-ceed7.firebasestorage.app",
                   messagingSenderId: "367993906452",
@@ -151,12 +167,11 @@
                 
                 const appInstance = initializeApp(firebaseConfig);
                 const authInstance = getAuth(appInstance);
-                setDb(getFirestore(appInstance));
+                // ดึง Database แบบ Realtime DB
+                setDb(getDatabase(appInstance));
 
                 const initAuth = async () => {
                     try {
-                        // บังคับให้ล็อกอินแบบ Anonymous เสมอเมื่อใช้ Firebase ของตัวเอง
-                        // การใช้ Custom Token จะทำให้เกิด Error หากตั้งค่าไม่ตรงกัน
                         await signInAnonymously(authInstance);
                     } catch (err) {
                         console.error("Auth Error:", err);
@@ -171,16 +186,17 @@
             }
           }, [firebaseLoaded]);
 
-          // Fetch Data from Firestore on Load & Real-time Sync
+          // Fetch Data from Realtime Database
           useEffect(() => {
             if (!user || !db || !window.FirebaseSDK) return;
-            const { doc, onSnapshot } = window.FirebaseSDK;
-            const appId = 'dmtimesheet-app';
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'timesheets', 'main_shared');
+            
+            const { ref, onValue } = window.FirebaseSDK;
+            const dataRef = ref(db, 'timesheets/main_shared');
 
-            const unsubscribe = onSnapshot(docRef, (docSnap) => {
-              if (docSnap.exists()) {
-                const data = docSnap.data();
+            // ใช้ onValue แทน onSnapshot สำหรับ Realtime DB
+            const unsubscribe = onValue(dataRef, (snapshot) => {
+              if (snapshot.exists()) {
+                const data = snapshot.val();
                 if (data.months && data.months.length > 0) setMonths(data.months);
                 if (data.dataByMonth) setDataByMonth(data.dataByMonth);
                 if (data.projects) setProjects(data.projects);
@@ -193,16 +209,20 @@
             return () => unsubscribe();
           }, [user, db]);
 
-          // Handle Save to Firebase
+          // Handle Save to Realtime Database
           const handleSaveData = async () => {
-            if (!user || !db || !window.FirebaseSDK) return;
+            if (!user || !db || !window.FirebaseSDK) {
+                setSaveStatus('error');
+                return;
+            }
             setSaveStatus('saving');
-            const { doc, setDoc } = window.FirebaseSDK;
-            const appId = 'dmtimesheet-app';
+            
+            const { ref, set } = window.FirebaseSDK;
 
             try {
-              const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'timesheets', 'main_shared');
-              await setDoc(docRef, {
+              // ใช้ set(ref(...)) แทน setDoc(doc(...))
+              const dataRef = ref(db, 'timesheets/main_shared');
+              await set(dataRef, {
                 months,
                 activeMonth,
                 dataByMonth,
@@ -210,7 +230,7 @@
                 members
               });
               setSaveStatus('saved');
-              setTimeout(() => setSaveStatus(''), 3000); // Reset status after 3 seconds
+              setTimeout(() => setSaveStatus(''), 3000);
             } catch (error) {
               console.error("Error saving data:", error);
               setSaveStatus('error');
@@ -551,14 +571,17 @@
                       className={`flex items-center justify-center gap-2 px-6 py-2 rounded-lg font-medium transition-all shadow-sm w-full ${
                         saveStatus === 'saved' ? 'bg-emerald-500 text-white' :
                         saveStatus === 'saving' ? 'bg-blue-400 text-white cursor-not-allowed' :
+                        saveStatus === 'error' ? 'bg-red-500 text-white' :
                         'bg-blue-600 text-white hover:bg-blue-700 hover:shadow'
                       }`}
                     >
                       {saveStatus === 'saved' ? <i className="fa-solid fa-circle-check"></i> : 
                        saveStatus === 'saving' ? <i className="fa-solid fa-spinner fa-spin"></i> : 
+                       saveStatus === 'error' ? <i className="fa-solid fa-circle-exclamation"></i> :
                        <i className="fa-solid fa-cloud"></i>}
                       {saveStatus === 'saved' ? 'Saved to Cloud' : 
                        saveStatus === 'saving' ? 'Saving...' : 
+                       saveStatus === 'error' ? 'Save Failed' :
                        'Save Data'}
                     </button>
                   </div>
@@ -591,7 +614,7 @@
                         </div>
                       )}
                       <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full flex items-center gap-1 hidden sm:flex">
-                        <i className="fa-solid fa-cloud text-xs"></i> Shared Workspace
+                        <i className="fa-solid fa-database text-xs"></i> Realtime DB Shared
                       </span>
                     </h1>
                     <p className="text-gray-500 mt-1">ติดตามชั่วโมงการทำงาน (Active vs Non-active) เทียบกับ Target</p>
@@ -1022,68 +1045,4 @@
                               <td className="px-4 py-2 text-center">
                                 <button 
                                   onClick={() => handleRemoveMember(member.id)}
-                                  className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50"
-                                >
-                                  <i className="fa-regular fa-trash-can"></i>
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      
-                      <button 
-                        onClick={handleAddMember}
-                        className="mt-4 flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium px-2 py-1"
-                      >
-                        <i className="fa-solid fa-plus"></i> เพิ่มสมาชิกใหม่ (Add Member)
-                      </button>
-                    </div>
-
-                    <div className="flex justify-end pt-4 border-t gap-3">
-                      <button
-                        onClick={() => setShowTeamModal(false)}
-                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                      >
-                        เสร็จสิ้น (Done)
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Delete Member Confirmation Modal */}
-              {memberToDelete && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                  <div className="bg-white p-6 rounded-xl shadow-lg max-w-sm w-full mx-4">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">ยืนยันการลบสมาชิก</h3>
-                    <p className="text-gray-600 mb-6">คุณแน่ใจหรือไม่ว่าต้องการลบสมาชิกท่านนี้ออกจากทีม?</p>
-                    <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => setMemberToDelete(null)}
-                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
-                      >
-                        ยกเลิก
-                      </button>
-                      <button
-                        onClick={() => {
-                          setMembers(members.filter(m => m.id !== memberToDelete));
-                          setMemberToDelete(null);
-                        }}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
-                      >
-                        ลบสมาชิก
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                                  className="text-red-
