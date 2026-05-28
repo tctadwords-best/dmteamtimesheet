@@ -562,8 +562,8 @@
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {/* Active % */}
-                        <tr className="bg-blue-50/30">
-                          <td className="px-6 py-3 font-medium text-blue-800">Active Project (%)</td>
+                        <tr className="bg-emerald-50/30">
+                          <td className="px-6 py-3 font-medium text-emerald-700">Active Project (%)</td>
                           {members.map(m => {
                             const stats = calculations.summary[m.id];
                             if (!stats) return <td key={m.id} className="px-6 py-3 border-l"></td>;
@@ -579,9 +579,9 @@
                         </tr>
                         {/* Non-Active % */}
                         <tr>
-                          <td className="px-6 py-3 font-medium text-gray-600">[Non-active] / Idle (%)</td>
+                          <td className="px-6 py-3 font-medium text-rose-700">[Non-active] / Idle (%)</td>
                           {members.map(m => (
-                            <td key={m.id} className="px-6 py-3 text-center border-l text-gray-600 font-medium">
+                            <td key={m.id} className="px-6 py-3 text-center border-l text-rose-600 font-medium">
                               {calculations.summary[m.id] ? calculations.summary[m.id].nonActivePercent.toFixed(2) : '0.00'}%
                             </td>
                           ))}
@@ -597,18 +597,18 @@
                         </tr>
                         {/* Active Hours */}
                         <tr>
-                          <td className="px-6 py-3 text-gray-600">Total Active Hrs (Logged)</td>
+                          <td className="px-6 py-3 font-medium text-emerald-700">Total Active Hrs (Logged)</td>
                           {members.map(m => (
-                            <td key={m.id} className="px-6 py-3 text-center border-l text-blue-600 font-medium">
+                            <td key={m.id} className="px-6 py-3 text-center border-l text-emerald-600 font-bold">
                               {calculations.summary[m.id] ? calculations.summary[m.id].totalActiveHours.toFixed(2) : '0.00'}
                             </td>
                           ))}
                         </tr>
                         {/* Non-Active Hours */}
                         <tr>
-                          <td className="px-6 py-3 text-gray-600">[Non-active] Hrs</td>
+                          <td className="px-6 py-3 font-medium text-rose-700">[Non-active] Hrs</td>
                           {members.map(m => (
-                            <td key={m.id} className="px-6 py-3 text-center border-l text-gray-500">
+                            <td key={m.id} className="px-6 py-3 text-center border-l text-rose-600 font-bold">
                               {calculations.summary[m.id] ? calculations.summary[m.id].nonActiveHours.toFixed(2) : '0.00'}
                             </td>
                           ))}
@@ -656,8 +656,85 @@
                   </div>
                 </div>
 
+                {/* --- NEW DASHBOARD SECTION --- */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Member Project Load Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                      <i className="fa-solid fa-briefcase text-blue-500"></i> สรุปจำนวนโปรเจกต์ที่แต่ละคนถืออยู่
+                    </h3>
+                    <div className="space-y-5">
+                      {(() => {
+                        const memberData = members.map(m => {
+                          const count = projects.filter(p => (hoursData[`${p.id}-${m.id}`] || 0) > 0).length;
+                          return { id: m.id, name: m.name, count };
+                        });
+                        const maxCount = Math.max(...memberData.map(m => m.count), 1); // ป้องกันหารด้วย 0
+                        
+                        return memberData.map(m => (
+                          <div key={m.id} className="relative">
+                            <div className="flex justify-between items-end mb-1.5">
+                              <span className="font-semibold text-gray-700">{m.name}</span>
+                              <span className="text-sm font-bold text-blue-600">{m.count} โปรเจกต์</span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-3">
+                              <div 
+                                className="bg-blue-500 h-3 rounded-full transition-all duration-1000" 
+                                style={{ width: `${(m.count / maxCount) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Top Projects Card */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                      <i className="fa-solid fa-fire text-orange-500"></i> โปรเจกต์ที่ใช้ชั่วโมงงานมากที่สุด (Top 5)
+                    </h3>
+                    <div className="space-y-5">
+                      {(() => {
+                        const topProjects = [...projects]
+                          .map(p => ({ ...p, totalHours: calculations.projectStats[p.id] ? calculations.projectStats[p.id].totalHours : 0 }))
+                          .filter(p => p.totalHours > 0)
+                          .sort((a, b) => b.totalHours - a.totalHours)
+                          .slice(0, 5);
+
+                        if (topProjects.length === 0) {
+                          return <div className="text-center text-gray-400 py-4 font-medium text-sm">ยังไม่มีการบันทึกชั่วโมงในเดือนนี้</div>;
+                        }
+
+                        const maxHours = topProjects[0].totalHours; // เอาค่ามากสุดมาทำสัดส่วน 100%
+
+                        return topProjects.map((p, idx) => (
+                          <div key={p.id} className="relative">
+                            <div className="flex justify-between items-end mb-1.5">
+                              <span className="font-semibold text-gray-700 flex items-center gap-2">
+                                <span className={`text-xs px-1.5 py-0.5 rounded text-white ${idx === 0 ? 'bg-orange-500' : 'bg-gray-400'}`}>
+                                  #{idx + 1}
+                                </span> 
+                                {p.name}
+                              </span>
+                              <span className="text-sm font-bold text-orange-600">{p.totalHours.toFixed(2)} ชม.</span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-3">
+                              <div 
+                                className={`h-3 rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-orange-500' : 'bg-amber-400'}`} 
+                                style={{ width: `${(p.totalHours / maxHours) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                {/* --- END NEW DASHBOARD SECTION --- */}
+
                 {/* Project Details Table */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-6">
                    <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
                     <h2 className="font-semibold text-lg">Active Projects Tracking</h2>
                     <span className="text-sm bg-blue-700 px-3 py-1 rounded-full">กรอกชั่วโมงที่ใช้ในแต่ละโปรเจกต์</span>
