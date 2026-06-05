@@ -23,6 +23,11 @@
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* Interactive Table Focus Effects */
+        .crosshair-active { background-color: #eff6ff !important; }
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -86,19 +91,26 @@
           const [isEditingMonth, setIsEditingMonth] = useState(false);
           const [editingMonthName, setEditingMonthName] = useState('');
 
+          // Member-centric View Tab
+          const [activeViewTab, setActiveViewTab] = useState('Overview');
+
+          // Interactive Table Focus States
+          const [focusedRowId, setFocusedRowId] = useState(null);
+          const [focusedColId, setFocusedColId] = useState(null);
+
           const [dataByMonth, setDataByMonth] = useState({
             'Feb-26': {
               baseHours: 176,
               maxHoursData: { ...initialMaxHours },
               hoursData: {},
               leaveData: INITIAL_TEAM_MEMBERS.reduce((acc, member) => {
-                acc[member.id] = { leave: 0, holiday: 0 };
+                acc[member.id] = { leave: 0 };
                 return acc;
               }, {})
             }
           });
 
-          // โหลดข้อมูลจาก LocalStorage ตอนเปิดเว็บ
+          // โหลดข้อมูลจาก LocalStorage
           useEffect(() => {
             const savedData = localStorage.getItem('adTeamTimesheetLocal');
             if (savedData) {
@@ -115,18 +127,12 @@
             }
           }, []);
 
-          // ฟังก์ชันบันทึกข้อมูลลงเครื่อง (LocalStorage)
+          // เซฟข้อมูลลง LocalStorage
           const handleSaveData = () => {
             setSaveStatus('saving');
             setTimeout(() => {
               try {
-                const dataToSave = {
-                  months,
-                  activeMonth,
-                  dataByMonth,
-                  projects,
-                  members
-                };
+                const dataToSave = { months, activeMonth, dataByMonth, projects, members };
                 localStorage.setItem('adTeamTimesheetLocal', JSON.stringify(dataToSave));
                 setSaveStatus('saved');
                 setTimeout(() => setSaveStatus(''), 3000);
@@ -134,7 +140,7 @@
                 console.error("Error saving to local storage:", error);
                 setSaveStatus('error');
               }
-            }, 500); // ดีเลย์จำลองการเซฟให้ดูเป็นธรรมชาติ
+            }, 500);
           };
 
           const currentData = dataByMonth[activeMonth] || {};
@@ -154,7 +160,7 @@
                   maxHoursData: { ...initialMaxHours },
                   hoursData: {},
                   leaveData: members.reduce((acc, member) => {
-                    acc[member.id] = { leave: 0, holiday: 0 };
+                    acc[member.id] = { leave: 0 };
                     return acc;
                   }, {})
                 }
@@ -204,47 +210,60 @@
 
           const handleHourChange = (projectId, memberId, value) => {
             const numValue = parseFloat(value) || 0;
-            setDataByMonth(prev => ({
-              ...prev,
-              [activeMonth]: {
-                ...(prev[activeMonth] || {}),
-                hoursData: {
-                  ...((prev[activeMonth] && prev[activeMonth].hoursData) || {}),
-                  [`${projectId}-${memberId}`]: numValue,
+            setDataByMonth(prev => {
+              const prevMonthData = prev[activeMonth] || {};
+              const prevHoursData = prevMonthData.hoursData || {};
+              return {
+                ...prev,
+                [activeMonth]: {
+                  ...prevMonthData,
+                  hoursData: {
+                    ...prevHoursData,
+                    [`${projectId}-${memberId}`]: numValue,
+                  }
                 }
-              }
-            }));
+              };
+            });
           };
 
           const handleMaxHourChange = (projectId, value) => {
             const numValue = parseFloat(value) || 0;
-            setDataByMonth(prev => ({
-              ...prev,
-              [activeMonth]: {
-                ...(prev[activeMonth] || {}),
-                maxHoursData: {
-                  ...((prev[activeMonth] && prev[activeMonth].maxHoursData) || initialMaxHours),
-                  [projectId]: numValue,
+            setDataByMonth(prev => {
+              const prevMonthData = prev[activeMonth] || {};
+              const prevMaxHoursData = prevMonthData.maxHoursData || initialMaxHours;
+              return {
+                ...prev,
+                [activeMonth]: {
+                  ...prevMonthData,
+                  maxHoursData: {
+                    ...prevMaxHoursData,
+                    [projectId]: numValue,
+                  }
                 }
-              }
-            }));
+              };
+            });
           };
 
           const handleLeaveChange = (memberId, type, value) => {
             const numValue = parseFloat(value) || 0;
-            setDataByMonth(prev => ({
-              ...prev,
-              [activeMonth]: {
-                ...(prev[activeMonth] || {}),
-                leaveData: {
-                  ...((prev[activeMonth] && prev[activeMonth].leaveData) || {}),
-                  [memberId]: {
-                    ...((prev[activeMonth] && prev[activeMonth].leaveData && prev[activeMonth].leaveData[memberId]) || {}),
-                    [type]: numValue,
+            setDataByMonth(prev => {
+              const prevMonthData = prev[activeMonth] || {};
+              const prevLeaveData = prevMonthData.leaveData || {};
+              const prevMemberLeave = prevLeaveData[memberId] || {};
+              return {
+                ...prev,
+                [activeMonth]: {
+                  ...prevMonthData,
+                  leaveData: {
+                    ...prevLeaveData,
+                    [memberId]: {
+                      ...prevMemberLeave,
+                      [type]: numValue,
+                    }
                   }
                 }
-              }
-            }));
+              };
+            });
           };
 
           const handleAddProject = () => {
@@ -269,6 +288,18 @@
           const handleDeleteProject = (projectId) => {
             setProjects(projects.filter(p => p.id !== projectId));
             setDeleteConfirmId(null);
+          };
+
+          const moveProject = (index, direction) => {
+            if (direction === 'up' && index > 0) {
+              const newProjects = [...projects];
+              [newProjects[index - 1], newProjects[index]] = [newProjects[index], newProjects[index - 1]];
+              setProjects(newProjects);
+            } else if (direction === 'down' && index < projects.length - 1) {
+              const newProjects = [...projects];
+              [newProjects[index + 1], newProjects[index]] = [newProjects[index], newProjects[index + 1]];
+              setProjects(newProjects);
+            }
           };
 
           const handleAddMember = () => {
@@ -299,8 +330,7 @@
             members.forEach((member) => {
               const memberLeaveData = leaveData[member.id] || {};
               const leave = memberLeaveData.leave || 0;
-              const holiday = memberLeaveData.holiday || 0;
-              const netWorkingHours = baseHours - leave - holiday;
+              const netWorkingHours = baseHours - leave;
               
               summary[member.id] = {
                 totalActiveHours: 0,
@@ -377,6 +407,11 @@
             return sortableItems;
           }, [projects, sortConfig, maxHoursData, calculations.projectStats, hoursData]);
 
+          // รายชื่อพนักงานที่จะแสดงในตาราง (ตามแท็บที่เลือก)
+          const displayedMembers = activeViewTab === 'Overview' 
+            ? members 
+            : members.filter(m => m.id === activeViewTab);
+
           if (!activeMonth && months.length === 0) {
             return (
               <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans">
@@ -402,23 +437,49 @@
                   <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide w-full">
                     {months.map(month => (
                       <div key={month} className="flex items-center group relative">
-                        <button
-                          onClick={() => setActiveMonth(month)}
-                          className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                            activeMonth === month 
-                              ? 'bg-blue-600 text-white shadow-md pr-10' 
-                              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                          }`}
-                        >
-                          {month}
-                        </button>
-                        {activeMonth === month && (
-                          <button 
-                            onClick={() => setDeleteMonthConfirm(month)}
-                            className="absolute right-2 text-blue-200 hover:text-white p-1 rounded-full hover:bg-blue-700 transition-colors"
-                            title="ลบเดือนนี้"
+                        {isEditingMonth && activeMonth === month ? (
+                          <div className="flex items-center bg-blue-600 rounded-lg p-1 shadow-md">
+                            <input
+                              type="text"
+                              value={editingMonthName}
+                              onChange={(e) => setEditingMonthName(e.target.value)}
+                              onBlur={handleRenameMonth}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameMonth();
+                                if (e.key === 'Escape') setIsEditingMonth(false);
+                              }}
+                              className="w-24 px-2 py-1.5 text-sm text-gray-900 rounded outline-none focus:ring-2 focus:ring-blue-300"
+                              autoFocus
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setActiveMonth(month)}
+                            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${
+                              activeMonth === month 
+                                ? 'bg-blue-600 text-white shadow-md' 
+                                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                            }`}
                           >
-                            <i className="fa-solid fa-trash-can text-xs"></i>
+                            {month}
+                            {activeMonth === month && (
+                              <div className="flex items-center gap-1 ml-1 border-l border-blue-400 pl-2">
+                                <span 
+                                  onClick={(e) => { e.stopPropagation(); setIsEditingMonth(true); setEditingMonthName(month); }}
+                                  className="text-blue-200 hover:text-white p-1 rounded hover:bg-blue-500 transition-colors cursor-pointer"
+                                  title="เปลี่ยนชื่อเดือน"
+                                >
+                                  <i className="fa-solid fa-pen text-[10px]"></i>
+                                </span>
+                                <span 
+                                  onClick={(e) => { e.stopPropagation(); setDeleteMonthConfirm(month); }}
+                                  className="text-blue-200 hover:text-white p-1 rounded hover:bg-red-500 transition-colors cursor-pointer"
+                                  title="ลบเดือนนี้"
+                                >
+                                  <i className="fa-solid fa-trash-can text-[10px]"></i>
+                                </span>
+                              </div>
+                            )}
                           </button>
                         )}
                       </div>
@@ -491,27 +552,7 @@
                   <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                       <i className="fa-regular fa-clock text-blue-600 text-2xl"></i>
-                      {isEditingMonth ? (
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="text" 
-                            value={editingMonthName} 
-                            onChange={e => setEditingMonthName(e.target.value)}
-                            className="border border-gray-300 rounded px-2 py-1 text-xl w-32 focus:ring-2 focus:ring-blue-400 outline-none"
-                            autoFocus
-                            onKeyDown={e => e.key === 'Enter' && handleRenameMonth()}
-                          />
-                          <button onClick={handleRenameMonth} className="bg-emerald-500 text-white p-1.5 rounded hover:bg-emerald-600"><i className="fa-solid fa-circle-check"></i></button>
-                          <button onClick={() => setIsEditingMonth(false)} className="bg-gray-200 text-gray-600 p-1.5 rounded hover:bg-gray-300"><i className="fa-solid fa-xmark"></i></button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          Ad Team Timesheet Management - {activeMonth}
-                          <button onClick={() => { setIsEditingMonth(true); setEditingMonthName(activeMonth); }} className="text-gray-400 hover:text-blue-600 transition-colors">
-                            <i className="fa-solid fa-pen text-sm"></i>
-                          </button>
-                        </div>
-                      )}
+                      Ad Team Timesheet Management - {activeMonth}
                       <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full flex items-center gap-1 hidden sm:flex">
                         <i className="fa-solid fa-laptop text-xs"></i> Local Workspace
                       </span>
@@ -541,160 +582,170 @@
                   </div>
                 </div>
 
-                {/* Top Summary Table */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="bg-gray-800 text-white px-6 py-4 flex items-center gap-2">
-                    <i className="fa-solid fa-users text-lg"></i>
-                    <h2 className="font-semibold text-lg">Team Utilization Summary</h2>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-gray-600 border-b">
-                        <tr>
-                          <th className="px-6 py-3 font-medium">Metric</th>
-                          {members.map(m => (
-                            <th key={m.id} className="px-6 py-3 font-medium text-center border-l">
-                              <div className="font-semibold text-gray-800">{m.name}</div>
-                              <div className="text-xs text-gray-500">Target Active: {m.targetActive}%</div>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {/* Active % */}
-                        <tr className="bg-emerald-50/30">
-                          <td className="px-6 py-3 font-medium text-emerald-700">Active Project (%)</td>
-                          {members.map(m => {
-                            const stats = calculations.summary[m.id];
-                            if (!stats) return <td key={m.id} className="px-6 py-3 border-l"></td>;
-                            return (
-                              <td key={m.id} className="px-6 py-3 text-center border-l font-bold">
-                                <span className={`inline-flex items-center gap-1 ${stats.isMeetingTarget ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {stats.activePercent.toFixed(2)}%
-                                  {stats.isMeetingTarget ? <i className="fa-solid fa-circle-check"></i> : <i className="fa-solid fa-circle-exclamation"></i>}
-                                </span>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                        {/* Non-Active % */}
-                        <tr>
-                          <td className="px-6 py-3 font-medium text-rose-700">[Non-active] / Idle (%)</td>
-                          {members.map(m => (
-                            <td key={m.id} className="px-6 py-3 text-center border-l text-rose-600 font-medium">
-                              {calculations.summary[m.id] ? calculations.summary[m.id].nonActivePercent.toFixed(2) : '0.00'}%
-                            </td>
-                          ))}
-                        </tr>
-                        {/* Working Hours After Leave */}
-                        <tr className="bg-gray-50">
-                          <td className="px-6 py-3 font-medium text-gray-800">Net Working Hrs (Exclude Leave/Holiday)</td>
-                          {members.map(m => (
-                            <td key={m.id} className="px-6 py-3 text-center border-l font-semibold text-gray-800">
-                              {calculations.summary[m.id] ? calculations.summary[m.id].netWorkingHours.toFixed(2) : '0.00'}
-                            </td>
-                          ))}
-                        </tr>
-                        {/* Active Hours */}
-                        <tr>
-                          <td className="px-6 py-3 font-medium text-emerald-700">Total Active Hrs (Logged)</td>
-                          {members.map(m => (
-                            <td key={m.id} className="px-6 py-3 text-center border-l text-emerald-600 font-bold">
-                              {calculations.summary[m.id] ? calculations.summary[m.id].totalActiveHours.toFixed(2) : '0.00'}
-                            </td>
-                          ))}
-                        </tr>
-                        {/* Non-Active Hours */}
-                        <tr>
-                          <td className="px-6 py-3 font-medium text-rose-700">[Non-active] Hrs</td>
-                          {members.map(m => (
-                            <td key={m.id} className="px-6 py-3 text-center border-l text-rose-600 font-bold">
-                              {calculations.summary[m.id] ? calculations.summary[m.id].nonActiveHours.toFixed(2) : '0.00'}
-                            </td>
-                          ))}
-                        </tr>
-                        {/* Leave Inputs */}
-                        <tr className="bg-orange-50/30">
-                          <td className="px-6 py-3 flex items-center gap-2 text-orange-800">
-                            <i className="fa-regular fa-calendar-xmark text-sm"></i> Day Off / Leave (Hrs)
-                          </td>
-                          {members.map(m => (
-                            <td key={m.id} className="px-4 py-2 border-l">
+                {/* --- INFOGRAPHIC TEAM SUMMARY CARDS --- */}
+                <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {members.map(m => {
+                      const stats = calculations.summary[m.id] || { activePercent: 0, netWorkingHours: 0, totalActiveHours: 0, nonActiveHours: 0, isMeetingTarget: false };
+                      
+                      const percent = Math.min(stats.activePercent, 100);
+                      const radius = 40;
+                      const circumference = Math.PI * radius;
+                      const dashoffset = circumference - (percent / 100) * circumference;
+                      
+                      const targetAngle = Math.PI - (m.targetActive / 100) * Math.PI;
+                      const targetX = 50 + 40 * Math.cos(targetAngle);
+                      const targetY = 50 - 40 * Math.sin(targetAngle);
+
+                      return (
+                        <div key={m.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col relative hover:shadow-md transition-shadow">
+                          {/* Card Header */}
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h3 className="font-bold text-gray-800 text-lg">{m.name}</h3>
+                              <p className="text-xs text-gray-500 font-medium bg-gray-100 inline-block px-2 py-0.5 rounded-full mt-1">{m.role}</p>
+                            </div>
+                            <div className="bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold border border-blue-100">
+                              Target: {m.targetActive}%
+                            </div>
+                          </div>
+
+                          {/* Gauge Chart */}
+                          <div className="relative w-full aspect-[2/1.1] flex items-end justify-center mb-6 mt-2">
+                            <svg viewBox="0 0 100 55" className="absolute top-0 w-full h-full overflow-visible">
+                              <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#f3f4f6" strokeWidth="12" strokeLinecap="round" />
+                              <path 
+                                d="M 10 50 A 40 40 0 0 1 90 50" 
+                                fill="none" 
+                                stroke={stats.isMeetingTarget ? '#10b981' : '#f43f5e'} 
+                                strokeWidth="12" 
+                                strokeLinecap="round"
+                                strokeDasharray={circumference}
+                                strokeDashoffset={dashoffset}
+                                className="transition-all duration-1000 ease-out"
+                              />
+                              <circle cx={targetX} cy={targetY} r="4" fill="white" stroke="#374151" strokeWidth="2.5" className="shadow-sm" />
+                            </svg>
+                            <div className="text-center pb-0 z-10 flex flex-col items-center">
+                              <span className={`text-3xl font-black leading-none ${stats.isMeetingTarget ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                {stats.activePercent.toFixed(1)}<span className="text-lg">%</span>
+                              </span>
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-1">Active Time</div>
+                            </div>
+                          </div>
+
+                          {/* Stats Grid */}
+                          <div className="grid grid-cols-2 gap-2 mt-auto">
+                            <div className="bg-gray-50 p-2.5 rounded-xl flex flex-col justify-center items-center">
+                              <div className="text-[11px] text-gray-500 font-medium mb-0.5">Net Hrs</div>
+                              <div className="font-bold text-gray-800 text-sm">{stats.netWorkingHours.toFixed(1)}</div>
+                            </div>
+                            <div className="bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100/50 flex flex-col justify-center items-center">
+                              <div className="text-[11px] text-emerald-600 font-medium mb-0.5">Active Hrs</div>
+                              <div className="font-bold text-emerald-700 text-sm">{stats.totalActiveHours.toFixed(1)}</div>
+                            </div>
+                            <div className="bg-rose-50/50 p-2.5 rounded-xl border border-rose-100/50 flex flex-col justify-center items-center">
+                              <div className="text-[11px] text-rose-600 font-medium mb-0.5">[Idle] Hrs</div>
+                              <div className="font-bold text-rose-700 text-sm">{stats.nonActiveHours.toFixed(1)}</div>
+                            </div>
+                            {/* Leave Input Box */}
+                            <div className="bg-orange-50 p-2.5 rounded-xl border border-orange-200 flex flex-col justify-center items-center relative group">
+                              <div className="text-[11px] text-orange-700 font-bold mb-0.5 flex items-center gap-1">
+                                <i className="fa-solid fa-pen text-[9px] opacity-60"></i> Leave Hrs
+                              </div>
                               <input
                                 type="number"
                                 min="0"
-                                step="0.01"
-                                className="w-full px-2 py-1 border rounded text-center focus:ring-2 focus:ring-orange-200 outline-none"
-                                value={(leaveData[m.id] && leaveData[m.id].leave) || ''}
+                                step="0.5"
+                                className="w-full bg-white border border-orange-200 shadow-inner rounded text-center text-sm font-bold text-orange-800 focus:ring-2 focus:ring-orange-400 outline-none transition-all py-0.5"
+                                value={(leaveData[m.id] && leaveData[m.id].leave) ? leaveData[m.id].leave : ''}
                                 onChange={(e) => handleLeaveChange(m.id, 'leave', e.target.value)}
                                 placeholder="0"
                               />
-                            </td>
-                          ))}
-                        </tr>
-                        {/* Holiday Inputs */}
-                        <tr className="bg-red-50/30">
-                          <td className="px-6 py-3 flex items-center gap-2 text-red-800">
-                            <i className="fa-regular fa-calendar-xmark text-sm"></i> Public Holiday (Hrs)
-                          </td>
-                          {members.map(m => (
-                            <td key={m.id} className="px-4 py-2 border-l">
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="w-full px-2 py-1 border rounded text-center focus:ring-2 focus:ring-red-200 outline-none"
-                                value={(leaveData[m.id] && leaveData[m.id].holiday) || ''}
-                                onChange={(e) => handleLeaveChange(m.id, 'holiday', e.target.value)}
-                                placeholder="0"
-                              />
-                            </td>
-                          ))}
-                        </tr>
-                      </tbody>
-                    </table>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* --- NEW DASHBOARD SECTION --- */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Member Project Load Card */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                {/* --- DASHBOARD CHARTS --- */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                  {/* 1. Member Project Load Card (Donut Chart) */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col">
                     <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-                      <i className="fa-solid fa-briefcase text-blue-500"></i> สรุปจำนวนโปรเจกต์ที่แต่ละคนถืออยู่
+                      <i className="fa-solid fa-chart-pie text-blue-500"></i> สัดส่วนจำนวนโปรเจกต์ที่รับผิดชอบ
                     </h3>
-                    <div className="space-y-5">
+                    <div className="flex-1 flex items-center justify-center gap-8">
                       {(() => {
+                        const activeProjectsList = projects.map(p => {
+                          const activeMems = members.filter(m => (hoursData[`${p.id}-${m.id}`] || 0) > 0);
+                          return { id: p.id, activeMems };
+                        }).filter(p => p.activeMems.length > 0);
+
+                        const uniqueProjectCount = activeProjectsList.length;
+
                         const memberData = members.map(m => {
-                          const count = projects.filter(p => (hoursData[`${p.id}-${m.id}`] || 0) > 0).length;
-                          return { id: m.id, name: m.name, count };
-                        });
-                        const maxCount = Math.max(...memberData.map(m => m.count), 1); // ป้องกันหารด้วย 0
+                          let rawCount = 0;
+                          let share = 0;
+                          activeProjectsList.forEach(p => {
+                            if (p.activeMems.some(mem => mem.id === m.id)) {
+                              rawCount++;
+                              share += 1 / p.activeMems.length;
+                            }
+                          });
+                          return { ...m, rawCount, share };
+                        }).sort((a, b) => b.rawCount - a.rawCount);
+
+                        const totalShare = uniqueProjectCount || 1;
+                        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
                         
-                        return memberData.map(m => (
-                          <div key={m.id} className="relative">
-                            <div className="flex justify-between items-end mb-1.5">
-                              <span className="font-semibold text-gray-700">{m.name}</span>
-                              <span className="text-sm font-bold text-blue-600">{m.count} โปรเจกต์</span>
-                            </div>
-                            <div className="w-full bg-gray-100 rounded-full h-3">
+                        let currentDegree = 0;
+                        const conicStops = memberData.map((m, i) => {
+                          const percent = (m.share / totalShare) * 100;
+                          const stop = `${colors[i % colors.length]} ${currentDegree}% ${currentDegree + percent}%`;
+                          currentDegree += percent;
+                          return stop;
+                        }).join(', ');
+
+                        return (
+                          <div className="flex flex-col sm:flex-row items-center gap-8 w-full justify-around">
+                            <div className="relative w-40 h-40 flex-shrink-0 drop-shadow-md">
                               <div 
-                                className="bg-blue-500 h-3 rounded-full transition-all duration-1000" 
-                                style={{ width: `${(m.count / maxCount) * 100}%` }}
+                                className="w-full h-full rounded-full"
+                                style={{ background: uniqueProjectCount > 0 ? `conic-gradient(${conicStops})` : '#f3f4f6' }}
                               ></div>
+                              <div className="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
+                                <span className="text-3xl font-black text-gray-800">{uniqueProjectCount}</span>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase leading-tight text-center mt-0.5">Unique<br/>Projects</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-3 w-full sm:w-auto">
+                              {memberData.map((m, i) => (
+                                <div key={m.id} className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: colors[i % colors.length] }}></div>
+                                    <span className="text-sm font-semibold text-gray-700">{m.name}</span>
+                                  </div>
+                                  <span className="text-sm font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">
+                                    {m.rawCount} <span className="text-xs text-gray-500 font-normal">({((m.share / totalShare) * 100).toFixed(0)}%)</span>
+                                  </span>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ));
+                        );
                       })()}
                     </div>
                   </div>
 
-                  {/* Top Projects Card */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                  {/* 2. Top Projects Card (Vertical Bar Chart) */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col">
                     <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
                       <i className="fa-solid fa-fire text-orange-500"></i> โปรเจกต์ที่ใช้ชั่วโมงงานมากที่สุด (Top 5)
                     </h3>
-                    <div className="space-y-5">
+                    <div className="flex-1 flex items-end justify-between h-48 gap-2">
                       {(() => {
                         const topProjects = [...projects]
                           .map(p => ({ ...p, totalHours: calculations.projectStats[p.id] ? calculations.projectStats[p.id].totalHours : 0 }))
@@ -703,69 +754,101 @@
                           .slice(0, 5);
 
                         if (topProjects.length === 0) {
-                          return <div className="text-center text-gray-400 py-4 font-medium text-sm">ยังไม่มีการบันทึกชั่วโมงในเดือนนี้</div>;
+                          return <div className="w-full text-center text-gray-400 py-4 font-medium text-sm self-center">ยังไม่มีการบันทึกชั่วโมงในเดือนนี้</div>;
                         }
 
-                        const maxHours = topProjects[0].totalHours; // เอาค่ามากสุดมาทำสัดส่วน 100%
+                        const maxHours = topProjects[0].totalHours;
 
                         return topProjects.map((p, idx) => (
-                          <div key={p.id} className="relative">
-                            <div className="flex justify-between items-end mb-1.5">
-                              <span className="font-semibold text-gray-700 flex items-center gap-2">
-                                <span className={`text-xs px-1.5 py-0.5 rounded text-white ${idx === 0 ? 'bg-orange-500' : 'bg-gray-400'}`}>
-                                  #{idx + 1}
-                                </span> 
-                                {p.name}
-                              </span>
-                              <span className="text-sm font-bold text-orange-600">{p.totalHours.toFixed(2)} ชม.</span>
+                          <div key={p.id} className="flex flex-col items-center flex-1 h-full justify-end group">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity mb-2 bg-gray-800 text-white text-[10px] py-1 px-2 rounded absolute -translate-y-full whitespace-nowrap z-10 pointer-events-none">
+                              {p.name}: {p.totalHours.toFixed(1)} ชม.
                             </div>
-                            <div className="w-full bg-gray-100 rounded-full h-3">
+                            <span className="text-xs font-bold text-orange-600 mb-1">{p.totalHours.toFixed(1)}</span>
+                            <div className="w-full max-w-[40px] bg-gray-100 rounded-t-md flex items-end justify-center relative overflow-hidden">
                               <div 
-                                className={`h-3 rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-orange-500' : 'bg-amber-400'}`} 
-                                style={{ width: `${(p.totalHours / maxHours) * 100}%` }}
+                                className={`w-full rounded-t-md transition-all duration-1000 ease-out ${idx === 0 ? 'bg-orange-500' : 'bg-amber-300'}`} 
+                                style={{ height: `${(p.totalHours / maxHours) * 100}%`, minHeight: '4px' }}
                               ></div>
                             </div>
+                            <span className="text-[10px] text-gray-500 mt-2 truncate w-full text-center font-medium" title={p.name}>
+                              {p.name.length > 8 ? p.name.substring(0,8)+'...' : p.name}
+                            </span>
                           </div>
                         ));
                       })()}
                     </div>
                   </div>
                 </div>
-                {/* --- END NEW DASHBOARD SECTION --- */}
 
-                {/* Project Details Table */}
+                {/* --- ACTIVE PROJECTS TRACKING (INTERACTIVE & MEMBER-CENTRIC) --- */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-6">
-                   <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
-                    <h2 className="font-semibold text-lg">Active Projects Tracking</h2>
-                    <span className="text-sm bg-blue-700 px-3 py-1 rounded-full">กรอกชั่วโมงที่ใช้ในแต่ละโปรเจกต์</span>
+                  <div className="bg-blue-600 text-white px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h2 className="font-semibold text-lg flex items-center gap-2">
+                        <i className="fa-solid fa-list-check"></i> Active Projects Tracking
+                      </h2>
+                      <p className="text-blue-200 text-sm">คลิกที่ช่องเพื่อกรอกชั่วโมงการทำงาน</p>
+                    </div>
                   </div>
+
+                  {/* Member Tabs for Table */}
+                  <div className="flex overflow-x-auto bg-gray-50 border-b border-gray-200 px-2 pt-2 scrollbar-hide">
+                    <button
+                      onClick={() => setActiveViewTab('Overview')}
+                      className={`px-6 py-2.5 rounded-t-lg font-bold text-sm whitespace-nowrap transition-colors border-b-2 ${
+                        activeViewTab === 'Overview' 
+                          ? 'bg-white text-blue-600 border-blue-600 shadow-[0_-2px_4px_rgba(0,0,0,0.02)]' 
+                          : 'text-gray-500 border-transparent hover:bg-gray-100 hover:text-gray-700'
+                      }`}
+                    >
+                      Overview
+                    </button>
+                    {members.map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setActiveViewTab(m.id)}
+                        className={`px-6 py-2.5 rounded-t-lg font-bold text-sm whitespace-nowrap transition-colors border-b-2 ${
+                          activeViewTab === m.id 
+                            ? 'bg-white text-blue-600 border-blue-600 shadow-[0_-2px_4px_rgba(0,0,0,0.02)]' 
+                            : 'text-gray-500 border-transparent hover:bg-gray-100 hover:text-gray-700'
+                        }`}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-gray-700 border-b">
+                      <thead className="bg-white text-gray-700 border-b">
                         <tr>
-                          <th className="px-4 py-3 font-medium w-10 text-center">No.</th>
-                          <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100 transition-colors group" onClick={() => handleSort('name')}>
-                            Project Name <i className="fa-solid fa-sort ml-1 text-gray-300 group-hover:text-blue-500"></i>
+                          <th className="px-4 py-4 font-medium w-10 text-center text-gray-400">#</th>
+                          <th className="px-4 py-4 font-bold cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('name')}>
+                            Project Name <i className="fa-solid fa-sort ml-1 text-gray-300"></i>
                           </th>
-                          <th className="px-4 py-3 font-medium text-center bg-yellow-50 cursor-pointer hover:bg-yellow-100 transition-colors group" onClick={() => handleSort('maxHours')}>
-                            Max Hr. <i className="fa-solid fa-sort ml-1 text-gray-400 group-hover:text-yellow-600"></i>
+                          <th className="px-4 py-4 font-bold text-center border-l bg-gray-50/50 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('maxHours')}>
+                            Max Hr <i className="fa-solid fa-sort ml-1 text-gray-300"></i>
                           </th>
-                          <th className="px-4 py-3 font-medium text-center bg-yellow-50 cursor-pointer hover:bg-yellow-100 transition-colors group" onClick={() => handleSort('totalHours')}>
-                            Total Hr. <i className="fa-solid fa-sort ml-1 text-gray-400 group-hover:text-yellow-600"></i>
+                          <th className="px-4 py-4 font-bold text-center bg-gray-50/50 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('totalHours')}>
+                            Total Hr <i className="fa-solid fa-sort ml-1 text-gray-300"></i>
                           </th>
-                          <th className="px-4 py-3 font-medium text-center bg-yellow-50 cursor-pointer hover:bg-yellow-100 transition-colors group" onClick={() => handleSort('achRate')}>
-                            Ach Rate <i className="fa-solid fa-sort ml-1 text-gray-400 group-hover:text-yellow-600"></i>
+                          <th className="px-4 py-4 font-bold text-center bg-gray-50/50 border-r cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('achRate')}>
+                            Ach Rate <i className="fa-solid fa-sort ml-1 text-gray-300"></i>
                           </th>
-                          {members.map(m => (
+                          {displayedMembers.map(m => (
                             <th 
                               key={m.id} 
-                              className="px-4 py-3 font-medium text-center border-l bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors group"
+                              className={`px-4 py-4 font-bold text-center border-l min-w-[100px] cursor-pointer hover:text-blue-600 transition-colors ${focusedColId === m.id ? 'bg-blue-50/50' : ''}`}
                               onClick={() => handleSort(`member-${m.id}`)}
                             >
-                              {m.name} <i className="fa-solid fa-sort ml-1 text-gray-400 group-hover:text-blue-500"></i>
+                              <div className="flex flex-col items-center">
+                                <span>{m.name}</span>
+                                {activeViewTab !== 'Overview' && <span className="text-[10px] font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded mt-1">Your Hours</span>}
+                              </div>
                             </th>
                           ))}
-                          <th className="px-4 py-3 font-medium text-center border-l bg-gray-50">ลบ</th>
+                          {activeViewTab === 'Overview' && <th className="px-4 py-4 font-medium text-center border-l text-gray-400"><i className="fa-solid fa-gear"></i></th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -773,11 +856,18 @@
                           const stats = calculations.projectStats[project.id];
                           const isOverLimit = stats.achRate > 100;
                           const currentMax = maxHoursData[project.id] !== undefined ? maxHoursData[project.id] : project.maxHours;
+                          const isRowFocused = focusedRowId === project.id;
 
                           return (
-                            <tr key={project.id} className="hover:bg-gray-50 transition-colors group/row">
-                              <td className="px-4 py-3 text-center text-gray-500">{index + 1}</td>
-                              <td className="px-4 py-3 font-medium text-gray-800 min-w-[150px]">
+                            <tr 
+                              key={project.id} 
+                              className={`transition-colors group/row ${isRowFocused ? 'crosshair-active' : 'hover:bg-gray-50'}`}
+                              onMouseEnter={() => setFocusedRowId(project.id)}
+                              onMouseLeave={() => setFocusedRowId(null)}
+                            >
+                              <td className="px-4 py-3 text-center text-gray-400 font-medium text-xs">{index + 1}</td>
+                              
+                              <td className="px-4 py-3 font-medium text-gray-800 relative">
                                 {editingProjectId === project.id ? (
                                   <div className="flex items-center gap-2">
                                     <input
@@ -786,117 +876,140 @@
                                       onChange={(e) => setEditingProjectName(e.target.value)}
                                       onBlur={() => saveProjectName(project.id)}
                                       onKeyDown={(e) => e.key === 'Enter' && saveProjectName(project.id)}
-                                      className="border border-gray-300 rounded px-2 py-1 w-full text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                                      className="border border-blue-400 rounded px-2 py-1 w-full text-sm focus:ring-2 focus:ring-blue-200 outline-none shadow-sm"
                                       autoFocus
                                     />
                                   </div>
                                 ) : (
-                                  <div className="flex items-center justify-between">
+                                  <div className="flex items-center justify-between group-hover/row:pr-12 transition-all">
                                     <span>{project.name}</span>
-                                    <button 
-                                      onClick={() => { setEditingProjectId(project.id); setEditingProjectName(project.name); }}
-                                      className="text-gray-300 hover:text-blue-600 opacity-0 group-hover/row:opacity-100 transition-all p-1"
-                                    >
-                                      <i className="fa-solid fa-pen text-xs"></i>
-                                    </button>
+                                    {activeViewTab === 'Overview' && (
+                                      <div className="absolute right-2 opacity-0 group-hover/row:opacity-100 flex items-center bg-white shadow-sm border border-gray-200 rounded overflow-hidden transition-all">
+                                        <button onClick={() => moveProject(index, 'up')} className="px-1.5 py-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="เลื่อนขึ้น"><i className="fa-solid fa-chevron-up text-[10px]"></i></button>
+                                        <button onClick={() => moveProject(index, 'down')} className="px-1.5 py-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 border-l border-gray-200" title="เลื่อนลง"><i className="fa-solid fa-chevron-down text-[10px]"></i></button>
+                                        <button onClick={() => { setEditingProjectId(project.id); setEditingProjectName(project.name); }} className="px-1.5 py-1 text-blue-500 hover:bg-blue-50 border-l border-gray-200" title="แก้ไขชื่อ"><i className="fa-solid fa-pen text-[10px]"></i></button>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </td>
                               
-                              {/* Project Quota Stats */}
-                              <td className="px-2 py-2 text-center bg-purple-50/30 border-r border-l border-gray-100">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  className="w-20 px-2 py-1.5 border rounded text-center font-semibold text-purple-700 focus:ring-2 focus:ring-purple-400 outline-none bg-white transition-all hover:border-purple-300 mx-auto block"
-                                  value={currentMax === 0 ? '0' : currentMax || ''}
-                                  onChange={(e) => handleMaxHourChange(project.id, e.target.value)}
-                                  placeholder="0"
-                                />
-                              </td>
-                              <td className="px-4 py-3 text-center font-semibold bg-gray-50/50">
-                                {stats.totalHours > 0 ? stats.totalHours.toFixed(2) : '-'}
-                              </td>
-                              <td className="px-4 py-3 text-center font-bold">
-                                <span className={`px-2 py-1 rounded text-xs ${
-                                  isOverLimit ? 'bg-red-100 text-red-700' : 
-                                  stats.achRate > 80 ? 'bg-orange-100 text-orange-700' : 
-                                  stats.achRate > 0 ? 'bg-green-100 text-green-700' : 'text-gray-400'
-                                }`}>
-                                  {stats.achRate.toFixed(2)}%
-                                </span>
-                              </td>
-
-                              {/* Individual Inputs */}
-                              {members.map(m => (
-                                <td key={m.id} className="px-2 py-2 border-l">
+                              <td className={`px-2 py-2 text-center border-l bg-gray-50/30 ${isRowFocused ? 'crosshair-active' : ''}`}>
+                                <div className="relative group/input">
                                   <input
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    className="w-full px-2 py-1.5 border rounded text-center text-gray-700 focus:ring-2 focus:ring-blue-400 outline-none bg-white transition-all hover:border-blue-300 min-w-[60px]"
-                                    value={hoursData[`${project.id}-${m.id}`] || ''}
-                                    onChange={(e) => handleHourChange(project.id, m.id, e.target.value)}
+                                    className="w-16 px-1 py-1 text-center font-bold text-gray-600 bg-transparent border-b-2 border-transparent hover:border-gray-300 focus:border-purple-500 focus:bg-white focus:shadow-sm outline-none transition-all mx-auto block"
+                                    value={currentMax === 0 ? '0' : currentMax || ''}
+                                    onChange={(e) => handleMaxHourChange(project.id, e.target.value)}
                                     placeholder="-"
+                                    disabled={activeViewTab !== 'Overview'}
                                   />
-                                </td>
-                              ))}
-                              
-                              {/* Delete Action */}
-                              <td className="px-2 py-2 text-center border-l">
-                                <button 
-                                  onClick={() => setDeleteConfirmId(project.id)}
-                                  className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                                  title="ลบโปรเจกต์"
-                                >
-                                  <i className="fa-regular fa-trash-can"></i>
-                                </button>
+                                </div>
                               </td>
+                              
+                              <td className={`px-4 py-3 text-center bg-gray-50/30 ${isRowFocused ? 'crosshair-active' : ''}`}>
+                                <div className="font-bold text-gray-700">{stats.totalHours > 0 ? stats.totalHours.toFixed(2) : '-'}</div>
+                                <div className="w-full h-1 bg-gray-200 rounded-full mt-1 overflow-hidden flex">
+                                  <div className={`h-full ${isOverLimit ? 'bg-red-500' : stats.achRate > 80 ? 'bg-orange-400' : 'bg-green-500'}`} style={{ width: `${Math.min(stats.achRate, 100)}%` }}></div>
+                                </div>
+                              </td>
+                              
+                              <td className={`px-4 py-3 text-center border-r bg-gray-50/30 ${isRowFocused ? 'crosshair-active' : ''}`}>
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                  isOverLimit ? 'bg-red-100 text-red-700' : 
+                                  stats.achRate > 80 ? 'bg-orange-100 text-orange-700' : 
+                                  stats.achRate > 0 ? 'bg-green-100 text-green-700' : 'text-gray-400'
+                                }`}>
+                                  {stats.achRate.toFixed(1)}%
+                                </span>
+                              </td>
+
+                              {/* Interactive Individual Inputs */}
+                              {displayedMembers.map(m => {
+                                const val = hoursData[`${project.id}-${m.id}`];
+                                const isColFocused = focusedColId === m.id;
+                                
+                                return (
+                                  <td 
+                                    key={m.id} 
+                                    className={`px-2 py-1.5 border-l transition-colors relative ${isColFocused || isRowFocused ? 'crosshair-active' : ''}`}
+                                    onMouseEnter={() => setFocusedColId(m.id)}
+                                    onMouseLeave={() => setFocusedColId(null)}
+                                  >
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      className={`w-full min-w-[60px] px-2 py-1.5 text-center font-bold text-gray-700 bg-transparent border-2 border-transparent hover:border-blue-200 hover:bg-white focus:border-blue-500 focus:bg-white focus:shadow-md outline-none rounded transition-all cursor-pointer focus:cursor-text ${val > 0 ? 'text-blue-600' : ''}`}
+                                      value={val || ''}
+                                      onChange={(e) => handleHourChange(project.id, m.id, e.target.value)}
+                                      placeholder="-"
+                                      onFocus={() => { setFocusedRowId(project.id); setFocusedColId(m.id); }}
+                                    />
+                                  </td>
+                                );
+                              })}
+                              
+                              {/* Delete Action (Only in Overview) */}
+                              {activeViewTab === 'Overview' && (
+                                <td className={`px-2 py-2 text-center border-l ${isRowFocused ? 'crosshair-active' : ''}`}>
+                                  <button 
+                                    onClick={() => setDeleteConfirmId(project.id)}
+                                    className="text-red-300 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-colors"
+                                    title="ลบโปรเจกต์"
+                                  >
+                                    <i className="fa-solid fa-trash-can"></i>
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
 
-                        {/* Add New Project Row */}
-                        <tr className="bg-blue-50/50 border-t-2 border-blue-100">
-                          <td className="px-4 py-3 text-center text-blue-500"><i className="fa-solid fa-plus"></i></td>
-                          <td className="px-4 py-3">
-                            <input 
-                              type="text" 
-                              value={newProjectName} 
-                              onChange={e => setNewProjectName(e.target.value)} 
-                              placeholder="+ ชื่อโปรเจกต์ใหม่..." 
-                              className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none bg-white shadow-sm" 
-                              onKeyDown={(e) => e.key === 'Enter' && handleAddProject()}
-                            />
-                          </td>
-                          <td className="px-2 py-2 bg-purple-50/20">
-                            <input 
-                              type="number" 
-                              min="0" 
-                              step="0.01"
-                              value={newProjectMax} 
-                              onChange={e => setNewProjectMax(e.target.value)} 
-                              placeholder="Max Hr." 
-                              className="w-20 px-2 py-1.5 text-sm border rounded-lg text-center mx-auto block focus:ring-2 focus:ring-purple-400 outline-none bg-white shadow-sm" 
-                              onKeyDown={(e) => e.key === 'Enter' && handleAddProject()}
-                            />
-                          </td>
-                          <td colSpan="2" className="px-4 py-3 text-center">
-                            <button 
-                              onClick={handleAddProject} 
-                              disabled={!newProjectName.trim()}
-                              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all w-full shadow-sm ${
-                                newProjectName.trim() 
-                                  ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                              }`}
-                            >
-                              เพิ่มโปรเจกต์
-                            </button>
-                          </td>
-                          <td colSpan={members.length + 1} className="bg-gray-50/50 border-l"></td>
-                        </tr>
+                        {/* Add New Project Row (Only in Overview) */}
+                        {activeViewTab === 'Overview' && (
+                          <tr className="bg-blue-50/50 border-t-2 border-blue-100">
+                            <td className="px-4 py-3 text-center text-blue-500"><i className="fa-solid fa-plus"></i></td>
+                            <td className="px-4 py-3">
+                              <input 
+                                type="text" 
+                                value={newProjectName} 
+                                onChange={e => setNewProjectName(e.target.value)} 
+                                placeholder="+ เพิ่มชื่อโปรเจกต์ใหม่..." 
+                                className="w-full px-3 py-1.5 text-sm border-2 border-transparent focus:border-blue-400 rounded-lg outline-none bg-white shadow-sm" 
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddProject()}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-center bg-gray-50/50 border-l">
+                              <input 
+                                type="number" 
+                                min="0" 
+                                step="0.01"
+                                value={newProjectMax} 
+                                onChange={e => setNewProjectMax(e.target.value)} 
+                                placeholder="Max Hr." 
+                                className="w-20 px-2 py-1.5 text-sm border-2 border-transparent focus:border-purple-400 rounded-lg text-center outline-none bg-white shadow-sm mx-auto block" 
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddProject()}
+                              />
+                            </td>
+                            <td colSpan="2" className="px-4 py-3 text-center bg-gray-50/50 border-r">
+                              <button 
+                                onClick={handleAddProject} 
+                                disabled={!newProjectName.trim()}
+                                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all w-full shadow-sm ${
+                                  newProjectName.trim() 
+                                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                                    : 'bg-blue-100 text-blue-300 cursor-not-allowed'
+                                }`}
+                              >
+                                เพิ่มเข้าตาราง
+                              </button>
+                            </td>
+                            <td colSpan={displayedMembers.length + 1} className="border-l"></td>
+                          </tr>
+                        )}
                       </tbody>
                       {/* Table Footer / Totals */}
                       <tfoot className="bg-gray-800 text-white font-semibold">
@@ -905,13 +1018,13 @@
                           <td className="px-4 py-3 text-center text-yellow-300">
                             {Object.values(calculations.projectStats).reduce((acc, curr) => acc + curr.totalHours, 0).toFixed(2)}
                           </td>
-                          <td className="px-4 py-3 text-center">-</td>
-                          {members.map(m => (
-                            <td key={m.id} className="px-4 py-3 text-center border-l border-gray-600">
+                          <td className="px-4 py-3 text-center border-r border-gray-600">-</td>
+                          {displayedMembers.map(m => (
+                            <td key={m.id} className="px-4 py-3 text-center border-l border-gray-600 text-emerald-400 font-bold">
                               {calculations.summary[m.id] ? calculations.summary[m.id].totalActiveHours.toFixed(2) : '0.00'}
                             </td>
                           ))}
-                          <td className="border-l border-gray-600"></td>
+                          {activeViewTab === 'Overview' && <td className="border-l border-gray-600"></td>}
                         </tr>
                       </tfoot>
                     </table>
