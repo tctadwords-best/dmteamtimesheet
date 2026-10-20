@@ -740,12 +740,12 @@
                     </div>
                   </div>
 
-                  {/* 2. Top Projects Card (Vertical Bar Chart) */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col">
+                  {/* 2. Top Projects Card (Horizontal Bar Chart) */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col justify-center">
                     <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
                       <i className="fa-solid fa-fire text-orange-500"></i> โปรเจกต์ที่ใช้ชั่วโมงงานมากที่สุด (Top 5)
                     </h3>
-                    <div className="flex-1 flex items-end justify-between h-48 gap-2">
+                    <div className="space-y-5 w-full">
                       {(() => {
                         const topProjects = [...projects]
                           .map(p => ({ ...p, totalHours: calculations.projectStats[p.id] ? calculations.projectStats[p.id].totalHours : 0 }))
@@ -754,26 +754,28 @@
                           .slice(0, 5);
 
                         if (topProjects.length === 0) {
-                          return <div className="w-full text-center text-gray-400 py-4 font-medium text-sm self-center">ยังไม่มีการบันทึกชั่วโมงในเดือนนี้</div>;
+                          return <div className="text-center text-gray-400 py-4 font-medium text-sm">ยังไม่มีการบันทึกชั่วโมงในเดือนนี้</div>;
                         }
 
-                        const maxHours = topProjects[0].totalHours;
+                        const maxHours = topProjects[0].totalHours; // เอาค่ามากสุดมาทำสัดส่วน 100%
 
                         return topProjects.map((p, idx) => (
-                          <div key={p.id} className="flex flex-col items-center flex-1 h-full justify-end group">
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity mb-2 bg-gray-800 text-white text-[10px] py-1 px-2 rounded absolute -translate-y-full whitespace-nowrap z-10 pointer-events-none">
-                              {p.name}: {p.totalHours.toFixed(1)} ชม.
+                          <div key={p.id} className="relative">
+                            <div className="flex justify-between items-end mb-1.5">
+                              <span className="font-semibold text-gray-700 flex items-center gap-2">
+                                <span className={`text-xs px-1.5 py-0.5 rounded text-white ${idx === 0 ? 'bg-orange-500' : 'bg-gray-400'}`}>
+                                  #{idx + 1}
+                                </span> 
+                                {p.name}
+                              </span>
+                              <span className="text-sm font-bold text-orange-600">{p.totalHours.toFixed(2)} ชม.</span>
                             </div>
-                            <span className="text-xs font-bold text-orange-600 mb-1">{p.totalHours.toFixed(1)}</span>
-                            <div className="w-full max-w-[40px] bg-gray-100 rounded-t-md flex items-end justify-center relative overflow-hidden">
+                            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
                               <div 
-                                className={`w-full rounded-t-md transition-all duration-1000 ease-out ${idx === 0 ? 'bg-orange-500' : 'bg-amber-300'}`} 
-                                style={{ height: `${(p.totalHours / maxHours) * 100}%`, minHeight: '4px' }}
+                                className={`h-3 rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-orange-500' : 'bg-amber-400'}`} 
+                                style={{ width: `${(p.totalHours / maxHours) * 100}%` }}
                               ></div>
                             </div>
-                            <span className="text-[10px] text-gray-500 mt-2 truncate w-full text-center font-medium" title={p.name}>
-                              {p.name.length > 8 ? p.name.substring(0,8)+'...' : p.name}
-                            </span>
                           </div>
                         ));
                       })()}
